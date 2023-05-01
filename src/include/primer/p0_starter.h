@@ -9,8 +9,7 @@
 // Copyright (c) 2015-2020, Carnegie Mellon University Database Group
 //
 //===----------------------------------------------------------------------===//
-//cute test cute 
-// hahaaa
+
 #pragma once
 
 #include <memory>
