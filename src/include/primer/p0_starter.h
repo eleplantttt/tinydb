@@ -121,10 +121,11 @@ class RowMatrix : public Matrix<T> {
    */
   RowMatrix(int rows, int cols) : Matrix<T>(rows, cols) {
     //声明一个一维数组
-    data_ = new T *[rows];
+    this->data_ = new T *[rows];
     //每个元素存放一个指向一维数组的指针
     for (int i = 0; i < rows; i++) {
         data_[i] = this->linear_ + i * cols;
+        // this->data_[i] = new T[cols];
     }
   }
 
@@ -238,7 +239,7 @@ class RowMatrixOperations {
    */
   static std::unique_ptr<RowMatrix<T>> Add(const RowMatrix<T> *matrixA, const RowMatrix<T> *matrixB) {
     // TODO(P0): Add implementation
-     //特判
+    //特判
     if (matrixA->GetRowCount() != matrixB->GetRowCount() || matrixA->GetColumnCount() != matrixB->GetColumnCount()) {
       return std::unique_ptr<RowMatrix<T>>(nullptr);
     }
@@ -300,7 +301,7 @@ class RowMatrixOperations {
   static std::unique_ptr<RowMatrix<T>> GEMM(const RowMatrix<T> *matrixA, const RowMatrix<T> *matrixB,
                                             const RowMatrix<T> *matrixC) {
     // TODO(P0): Add implementation
-        //特判
+    //特判
     if (matrixA->GetColumnCount() != matrixB->GetRowCount()) {
       return std::unique_ptr<RowMatrix<T>>(nullptr);
     }
