@@ -121,7 +121,7 @@ class RowMatrix : public Matrix<T> {
    */
   RowMatrix(int rows, int cols) : Matrix<T>(rows, cols) {
     //声明一个一维数组
-    this->data_ = new T *[rows];
+    data_ = new T *[rows];
     //每个元素存放一个指向一维数组的指针
     for (int i = 0; i < rows; i++) {
         data_[i] = this->linear_ + i * cols;
