@@ -37,10 +37,9 @@ class TrieNode {
    *
    * @param key_char Key character of this trie node
    */
-  explicit TrieNode(char key_char) {
+  explicit TrieNode(char key_char) : key_char_(key_char) {
     is_end_ = false;
-    key_char_ = key_char;
-  }
+  }    //没有初始化is_end
 
   /**
    * TODO(P0): Add implementation
@@ -122,7 +121,7 @@ class TrieNode {
     if (children_.count(key_char) != 0U) {
       return nullptr;
     }
-    if (child->key_char_ != key_char) {
+    if (child->key_char_ != key_char) {           //判断输入对不对的上key_char
       return nullptr;
     }
     children_[key_char] = std::move(child);
@@ -299,7 +298,7 @@ class Trie {
       latch_.WUnlock();
       return false;
     }
-    auto p = &root_;
+    auto p = &this->root_;
     for (auto key_char : key) {
       if (!p->get()->HasChild(key_char)) {
         p->get()->InsertChildNode(key_char, std::make_unique<TrieNode>(key_char));
@@ -309,16 +308,44 @@ class Trie {
     }
     if (p->get()->IsEndNode()) {
       latch_.WUnlock();
-      return false;
+      return false;//3末尾是TrieNodewithvalue 就是有重复的值
     }
     auto temp_node = std::move(*p);
     parent->get()->RemoveChildNode(key.back());
+    //第一种构造TrieNodewithvalue
     auto temp = std::make_unique<TrieNodeWithValue<T>>(std::move(*temp_node), value);
+
     parent->get()->InsertChildNode(key.back(), std::move(temp));
     latch_.WUnlock();
     return true;
   }
 
+
+  /**
+   * TODO(P0): Add implementation
+   *
+   * @brief Remove key value pair from the trie.
+   * This function should also remove nodes that are no longer part of another
+   * key. If key is empty or not found, return false.
+   *
+   * You should:
+   * 1) Find the terminal node for the given key.
+   * 2) If this terminal node does not have any children, remove it from its
+   * parent's children_ map.
+   * 3) Recursively remove nodes that have no children and are not terminal node
+   * of another key.
+   *
+   * @param key Key used to traverse the trie and find the correct node
+   * @return True if the key exists and is removed, false otherwise
+   */
+  auto Remove(const std::string &key) -> bool {
+    latch_.WLock();
+    bool a = true;
+    bool *success = &a;
+    Dfs(key, &root_, 0, success);
+    latch_.WUnlock();
+    return *success;
+  }
   auto Dfs(const std::string &key, std::unique_ptr<TrieNode> *root, size_t index, bool *success)
       -> std::unique_ptr<TrieNode> * {
     if (index == key.size()) {
@@ -351,32 +378,6 @@ class Trie {
     *success = false;
     return nullptr;
   }
-  /**
-   * TODO(P0): Add implementation
-   *
-   * @brief Remove key value pair from the trie.
-   * This function should also remove nodes that are no longer part of another
-   * key. If key is empty or not found, return false.
-   *
-   * You should:
-   * 1) Find the terminal node for the given key.
-   * 2) If this terminal node does not have any children, remove it from its
-   * parent's children_ map.
-   * 3) Recursively remove nodes that have no children and are not terminal node
-   * of another key.
-   *
-   * @param key Key used to traverse the trie and find the correct node
-   * @return True if the key exists and is removed, false otherwise
-   */
-  auto Remove(const std::string &key) -> bool {
-    latch_.WLock();
-    bool a = true;
-    bool *success = &a;
-    Dfs(key, &root_, 0, success);
-    latch_.WUnlock();
-    return *success;
-  }
-
   /**
    * TODO(P0): Add implementation
    *
