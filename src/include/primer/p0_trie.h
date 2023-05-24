@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -37,9 +38,7 @@ class TrieNode {
    *
    * @param key_char Key character of this trie node
    */
-  explicit TrieNode(char key_char) : key_char_(key_char) {
-    is_end_ = false;
-  }    //没有初始化is_end
+  explicit TrieNode(char key_char) : key_char_(key_char) { is_end_ = false; }  // 没有初始化is_end
 
   /**
    * TODO(P0): Add implementation
@@ -121,7 +120,7 @@ class TrieNode {
     if (children_.count(key_char) != 0U) {
       return nullptr;
     }
-    if (child->key_char_ != key_char) {           //判断输入对不对的上key_char
+    if (child->key_char_ != key_char) {  // 判断输入对不对的上key_char
       return nullptr;
     }
     children_[key_char] = std::move(child);
@@ -250,9 +249,9 @@ class TrieNodeWithValue : public TrieNode {
  */
 class Trie {
  private:
-  /* Root node of the trie */
+  /* 前缀树的根节点 */
   std::unique_ptr<TrieNode> root_;
-  /* Read-write lock for the trie */
+  /* 前缀树的读写锁 */
   ReaderWriterLatch latch_;
 
  public:
@@ -262,7 +261,7 @@ class Trie {
    * @brief Construct a new Trie object. Initialize the root node with '\0'
    * character.
    */
-  Trie() { root_ = std::make_unique<TrieNode>(TrieNode('\0')); }
+  Trie() { root_ = std::make_unique<TrieNode>(TrieNode('\0')); }  // 智能指针
 
   /**
    * TODO(P0): Add implementation
@@ -289,6 +288,12 @@ class Trie {
    * @param key Key used to traverse the trie and find the correct node
    * @param value Value to be inserted
    * @return True if insertion succeeds, false if the key already exists
+   * 如果key是空字符串立即返回false
+     如果key存在返回false，而且不能重写
+     在字符串的最后一个字符时有三种情况：
+     1、最后一个字符不存在，则实现一个新的TrieNodeWithValue
+     2、如果终止字符是TrieNode，则用移动构造转换为TrieNodeWithValue
+     3、如果已经是TrieNodeWithValue，插入失败然后返回false不能重写
    */
   template <typename T>
   auto Insert(const std::string &key, T value) -> bool {
@@ -308,18 +313,17 @@ class Trie {
     }
     if (p->get()->IsEndNode()) {
       latch_.WUnlock();
-      return false;//3末尾是TrieNodewithvalue 就是有重复的值
+      return false;  // 3末尾是TrieNodewithvalue 就是有重复的值
     }
     auto temp_node = std::move(*p);
     parent->get()->RemoveChildNode(key.back());
-    //第一种构造TrieNodewithvalue
+    // 第一种构造TrieNodewithvalue
     auto temp = std::make_unique<TrieNodeWithValue<T>>(std::move(*temp_node), value);
 
     parent->get()->InsertChildNode(key.back(), std::move(temp));
     latch_.WUnlock();
     return true;
   }
-
 
   /**
    * TODO(P0): Add implementation
@@ -334,50 +338,87 @@ class Trie {
    * parent's children_ map.
    * 3) Recursively remove nodes that have no children and are not terminal node
    * of another key.
-   *
+   * 1) 找到最后的节点
+   * 2) 如果这个节点没有孩子则删除
+   * 3) 递归的删除没有孩子的节点和不是另一个键的最后节点
    * @param key Key used to traverse the trie and find the correct node
    * @return True if the key exists and is removed, false otherwise
    */
+  //  迭代实现
   auto Remove(const std::string &key) -> bool {
+    if (key.empty()) {
+      return false;
+    }
     latch_.WLock();
-    bool a = true;
-    bool *success = &a;
-    Dfs(key, &root_, 0, success);
-    latch_.WUnlock();
-    return *success;
-  }
-  auto Dfs(const std::string &key, std::unique_ptr<TrieNode> *root, size_t index, bool *success)
-      -> std::unique_ptr<TrieNode> * {
-    if (index == key.size()) {
-      if (!root->get()->IsEndNode()) {
-        *success = false;
-        return nullptr;
+    auto node = &root_;
+    std::vector<std::unique_ptr<TrieNode> *> trav_path;
+    for (auto ch : key) {
+      trav_path.emplace_back(node);
+      auto next = node->get()->GetChildNode(ch);
+      if (next == nullptr) {
+        latch_.WUnlock();
+        return false;
       }
-      if (!root->get()->HasChildren()) {
-        *success = true;
-        return nullptr;
-      }
-      *success = true;
-      root->get()->SetEndNode(false);
-      return root;
+      node = next;
     }
-    std::unique_ptr<TrieNode> *node;
-    if (root->get()->HasChild(key[index])) {
-      node = Dfs(key, root->get()->GetChildNode(key[index]), index + 1, success);
-      if (!*success) {
-        return nullptr;
-      }
-      if (node == nullptr) {
-        root->get()->RemoveChildNode(key[index]);
-        if (!root->get()->HasChildren() && !root->get()->IsEndNode()) {
-          return nullptr;
+
+    if (node->get()->HasChildren()) {
+      node->get()->SetEndNode(false);
+    } else {
+      for (int i = trav_path.size() - 1; i >= 0; i--) {
+        auto pre = trav_path[i];
+        if ((i < static_cast<int>(key.size() - 1)) && (node->get()->IsEndNode() || node->get()->HasChildren())) {
+          break;
         }
+        pre->get()->RemoveChildNode(key[i]);
+        node = pre;
       }
-      return root;
     }
-    *success = false;
-    return nullptr;
+    latch_.WUnlock();
+    return true;
   }
+  // 递归实现
+  // auto Remove(const std::string &key) -> bool {
+  //     latch_.WLock();
+  //     bool a = true;
+  //     bool *success = &a;
+  //     Dfs(key, &this->root_, 0, success);
+  //     latch_.WUnlock();
+  //     return *success;
+  // }
+  // auto Dfs(const std::string &key, std::unique_ptr<TrieNode> *root, size_t index, bool *success)
+  //  -> std::unique_ptr<TrieNode> *{
+  //     if(index == key.size()){
+  //       if(!root->get()->IsEndNode()){      //没有is_end标志
+  //         *success = false;
+  //         return nullptr;
+  //       }
+  //       if(!root->get()->HasChildren()){    //没有孩子节点
+  //         *success = true;
+  //         return nullptr;
+  //       }
+  //       *success = true;
+  //       root->get()->SetEndNode(false);
+  //       return root;
+  //     }
+
+  //     std::unique_ptr<TrieNode> *node;
+  //     if(root->get()->HasChild(key[index])){
+  //         node = Dfs(key, root->get()->GetChildNode(key[index]), index + 1, success);
+  //         if (!*success) {
+  //             return nullptr;
+  //         }
+  //         if(node == nullptr) {
+  //             root->get()->RemoveChildNode(key[index]);
+  //             if (!root->get()->IsEndNode() && !root->get()->HasChildren()) {
+  //                 return nullptr;
+  //             }
+  //         }
+  //         return root;
+  //     }
+  //     *success = false;
+  //     return nullptr;
+  //  }
   /**
    * TODO(P0): Add implementation
    *
@@ -419,6 +460,7 @@ class Trie {
       latch_.RUnlock();
       return {};
     }
+    // 如果是TrieNodeWithValue则成功，不是TrieNodeWithValue而是TrieNode则为下行转换不成功返回nullptr
     auto res = dynamic_cast<TrieNodeWithValue<T> *>(p->get());
     if (res) {
       *success = true;
