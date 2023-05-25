@@ -144,11 +144,11 @@ class LRUKReplacer {
 
   std::unordered_map<frame_id_t, size_t> access_count_;
 
-  std::list<frame_id_t> history_list_;                  //历史链表
-  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> history_map_;  //历史哈希表
+  std::list<frame_id_t> history_list_;                                           // 历史链表
+  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> history_map_;  // 历史哈希表
 
-  std::list<frame_id_t> cache_list_;                  //缓存
-  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> cache_map_;  //缓存哈希表
+  std::list<frame_id_t> cache_list_;                                           // 缓存
+  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> cache_map_;  // 缓存哈希表
 
   std::unordered_map<frame_id_t, bool> is_evictable_;
 };
