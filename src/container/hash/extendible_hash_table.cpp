@@ -30,7 +30,7 @@ namespace bustub {
 template <typename K, typename V>
 ExtendibleHashTable<K, V>::ExtendibleHashTable(size_t bucket_size)
     : global_depth_(0), bucket_size_(bucket_size), num_buckets_(1) {
-  dir_.push_back(std::make_unique<Bucket>(bucket_size, 0));
+  dir_.push_back(std::make_shared<Bucket>(bucket_size, 0));  // bug make_unique改shared
 }
 
 template <typename K, typename V>
@@ -97,7 +97,7 @@ void ExtendibleHashTable<K, V>::Insert(const K &key, const V &value) {
   std::scoped_lock<std::mutex> lock(latch_);
 
   while (dir_[IndexOf(key)]->IsFull()) {
-    int index = IndexOf(key);
+    auto index = IndexOf(key);  // bug free int改auto
     auto target_bucket = dir_[index];
 
     if (target_bucket->GetDepth() == GetGlobalDepthInternal()) {  // 全局深度等于局部深度
@@ -182,7 +182,7 @@ auto ExtendibleHashTable<K, V>::Bucket::Insert(const K &key, const V &value) -> 
   if (IsFull()) {
     return false;
   }
-  list_.emplace_back(key, value);
+  list_.emplace_back(key, value);  // 内存泄漏
   return true;
 }
 
