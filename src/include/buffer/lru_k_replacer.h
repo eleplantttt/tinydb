@@ -18,6 +18,7 @@
 #include <mutex>  // NOLINT
 #include <unordered_map>
 #include <vector>
+#include <set>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -137,20 +138,31 @@ class LRUKReplacer {
   // TODO(student): implement me! You can replace these member variables as you like.
   // Remove maybe_unused if you start using them.
   // size_t current_timestamp_{0};
-  size_t curr_size_{0};
-  size_t replacer_size_;
+  struct Node {
+      frame_id_t id_;
+      int64_t time_;
+      Node(frame_id_t id, time_t time) : id_(id), time_(time) {}
+      auto operator<(const Node &rhs) const ->bool {return time_ < rhs.time_; }
+  };
+  size_t current_timestamp_{0};
+  size_t cur_size_{0};         // 可驱逐大小
+  size_t replacer_size_;       // 剩余容量
   size_t k_;
   std::mutex latch_;
 
-  std::unordered_map<frame_id_t, size_t> access_count_;
+  std::unordered_map<frame_id_t, time_t> frame_time_;
+  std::unordered_map<frame_id_t, size_t> frame_cnt_;
+  std::unordered_map<frame_id_t, bool> evitable_;
 
-  std::list<frame_id_t> history_list_;                                           // 历史链表
-  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> history_map_;  // 历史哈希表
+  std::set<Node> inf_set_;
+  std::set<Node> kth_set_;
 
-  std::list<frame_id_t> cache_list_;                                           // 缓存
-  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> cache_map_;  // 缓存哈希表
+  auto InsertToSet(frame_id_t frame_id) -> void;
+  auto RemoveFromSet(frame_id_t frame_id) -> void;
+  auto RemoveRecord(frame_id_t frame_id) -> void;
+  auto EvitFromSet(std::set<Node> &set_, frame_id_t *frame_id) -> bool;
+  auto GetTimeStamp() -> int64_t;
 
-  std::unordered_map<frame_id_t, bool> is_evictable_;
 };
 
 }  // namespace bustub

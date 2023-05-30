@@ -30,7 +30,8 @@ namespace bustub {
 template <typename K, typename V>
 ExtendibleHashTable<K, V>::ExtendibleHashTable(size_t bucket_size)
     : global_depth_(0), bucket_size_(bucket_size), num_buckets_(1) {
-  dir_.push_back(std::make_shared<Bucket>(bucket_size, 0));  // bug make_unique改shared
+  // 初始化：全局深度为0，局部深度为0，桶数量为1
+  dir_.emplace_back(std::make_shared<Bucket>(bucket_size, 0));
 }
 
 template <typename K, typename V>
@@ -41,7 +42,7 @@ auto ExtendibleHashTable<K, V>::IndexOf(const K &key) -> size_t {
 
 template <typename K, typename V>
 auto ExtendibleHashTable<K, V>::GetGlobalDepth() const -> int {
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::shared_lock lock(latch_);
   return GetGlobalDepthInternal();
 }
 
@@ -52,7 +53,7 @@ auto ExtendibleHashTable<K, V>::GetGlobalDepthInternal() const -> int {
 
 template <typename K, typename V>
 auto ExtendibleHashTable<K, V>::GetLocalDepth(int dir_index) const -> int {
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::shared_lock lock(latch_);
   return GetLocalDepthInternal(dir_index);
 }
 
@@ -63,7 +64,7 @@ auto ExtendibleHashTable<K, V>::GetLocalDepthInternal(int dir_index) const -> in
 
 template <typename K, typename V>
 auto ExtendibleHashTable<K, V>::GetNumBuckets() const -> int {
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::shared_lock lock(latch_);
   return GetNumBucketsInternal();
 }
 
@@ -71,84 +72,87 @@ template <typename K, typename V>
 auto ExtendibleHashTable<K, V>::GetNumBucketsInternal() const -> int {
   return num_buckets_;
 }
+template <typename K, typename V>
+auto ExtendibleHashTable<K, V>::CalIndex(size_t &idx, int depth) -> size_t {   // 计算索引
+  return idx ^ (1 << (depth - 1));                                            // 将depth-1(旧的全局深度)左移一位与 idx 进行按位异或运算
+}
 
 template <typename K, typename V>
 auto ExtendibleHashTable<K, V>::Find(const K &key, V &value) -> bool {
-  std::scoped_lock<std::mutex> lock(latch_);
-
+  std::shared_lock lock(latch_);
   auto index = IndexOf(key);
-  auto target_bucket = dir_[index];
-
-  return target_bucket->Find(key, value);
+  return dir_[index]->Find(key, value);
 }
 
 template <typename K, typename V>
 auto ExtendibleHashTable<K, V>::Remove(const K &key) -> bool {
-  std::scoped_lock<std::mutex> lock(latch_);
-
+  std::unique_lock lock(latch_);
   auto index = IndexOf(key);
-  auto target_bucket = dir_[index];
-
-  return target_bucket->Remove(key);
+  return dir_[index]->Remove(key);
 }
 
 template <typename K, typename V>
 void ExtendibleHashTable<K, V>::Insert(const K &key, const V &value) {
-  std::scoped_lock<std::mutex> lock(latch_);
-
-  while (dir_[IndexOf(key)]->IsFull()) {
-    auto index = IndexOf(key);  // bug free int改auto
-    auto target_bucket = dir_[index];
-
-    if (target_bucket->GetDepth() == GetGlobalDepthInternal()) {  // 全局深度等于局部深度
-      global_depth_++;
-      int capacity = dir_.size();
-      dir_.resize(capacity << 1);
-      for (int i = 0; i < capacity; i++) {
-        dir_[i + capacity] = dir_[i];
+  std::unique_lock lock(latch_);                                      // 独占锁(写锁)
+  while (true) {                                                         // 循环扩容防止分裂一次以后，还是被分配到同一个桶
+    size_t idx;
+    bool ok;
+    {
+      idx = IndexOf(key);
+      ok = dir_[idx]->Insert(key, value);                                 // 插入成功
+      if (ok) {
+        return ;
       }
     }
-
-    // 局部深度小于全局深度
-    int mask = 1 << target_bucket->GetDepth();  // 将一左移target_bucket->GetDepth()位 两倍扩容
-    auto bucket_0 = std::make_shared<Bucket>(bucket_size_, target_bucket->GetDepth() + 1);  // 桶分裂
-    auto bucket_1 = std::make_shared<Bucket>(bucket_size_, target_bucket->GetDepth() + 1);
-
-    for (const auto &item : target_bucket->GetItems()) {  // 原来桶里的重新分桶
-      size_t hase_key = std::hash<K>()(item.first);
-      if ((hase_key & mask) != 0U) {
-        bucket_1->Insert(item.first, item.second);
-      } else {
-        bucket_0->Insert(item.first, item.second);
-      }
-    }
-
-    num_buckets_++;
-
-    for (size_t i = 0; i < dir_.size(); i++) {  // 重新将目录和分完后的桶对应
-      if (dir_[i] == target_bucket) {
-        if ((i & mask) != 0U) {
-          dir_[i] = bucket_1;
-        } else {
-          dir_[i] = bucket_0;
-        }
-      }
+    if (dir_[idx]->GetDepth() == global_depth_) {                         // 局部深度等于全局深度 桶分裂且目录扩张
+      Expansion();
+      RedistributeBucket(idx);
+    } else {                                                              // 桶分裂
+      RedistributeBucket(idx);
     }
   }
-
-  auto index = IndexOf(key);  // 开始哈希装桶
-  auto target_bucket = dir_[index];
-
-  for (auto &item : target_bucket->GetItems()) {  //  已有键值更新value
-    if (item.first == key) {
-      item.second = value;
-      return;
-    }
-  }
-
-  target_bucket->Insert(key, value);  // 没有键值直接插入
 }
 
+template <typename K, typename V>
+auto ExtendibleHashTable<K, V>::Expansion() -> void {
+  size_t old_size = 1 << global_depth_++;                                // 二进制位向左移一位，就是两倍扩容前
+  size_t new_size = 1 << global_depth_;                                  // 二进制位向左移一位，就是两倍扩容前
+  dir_.reserve(new_size);                                             // 扩容到新容量
+  for (size_t i = old_size; i < new_size ; ++i) {                        // 从后一半开始指针重定向old_size开始
+    dir_.push_back(dir_[i - old_size]);          // eg:从i=old_size=4(100) 全局深度已经加一为3 传入 传出dir[4]
+  }
+}
+// localDepth < globalDepth 多个dir_指向一个同一个新桶
+// 只会分裂出一个新桶
+// 注意把多个dir_分成两种指向
+template <typename K, typename V>
+auto ExtendibleHashTable<K, V>::RedistributeBucket(size_t idx) -> void {
+  int old_depth = dir_[idx]->GetDepth();                                  // 先拿桶的原局部深度为分裂做准备
+  size_t old_size = 1 << (global_depth_ - 1);
+  size_t  old_idx = idx & ((1 << old_depth) - 1);                         // 拿到旧的指针指向
+  auto &old_bucket = dir_[old_idx];                                       // 指向旧桶指针不变
+//  auto &new_bucket = dir_[CalIndex(old_idx, old_depth + 1)];     // 指针定向新桶
+  auto &new_bucket = dir_[old_idx + old_size];     // 指针定向新桶
+  new_bucket.reset(new Bucket(bucket_size_, old_depth));                   // 重置bucket
+
+  old_bucket->IncrementDepth();                                             // 局部深度自增
+  new_bucket->IncrementDepth();
+
+//  size_t diff = global_depth_ - old_depth;                                   // 差 1
+//  int n = (1 << diff) - 1;                                                   //  n = 1
+
+  for (int i = 0; i <= 1 ; ++i) {                                            // 溢出桶重新分桶                 ********
+    size_t index = (i << old_depth) + old_idx;                               // i = 0 old_bucket i = 1 new_bucket
+    dir_[index] = static_cast<bool>(i & 1) ? new_bucket : old_bucket;        // 指针指向确定
+  }
+
+  num_buckets_ += 1;                                                         // 桶数量加1
+  auto list = std::move(old_bucket->GetItems());                             // 拿到旧桶的所有数据
+
+  for (auto &[k, v] : list) {                                                // 遍历旧桶重新分配
+    dir_[IndexOf(k)]->Insert(k, v);
+  }
+}
 //===--------------------------------------------------------------------===//
 // Bucket
 //===--------------------------------------------------------------------===//
@@ -157,6 +161,7 @@ ExtendibleHashTable<K, V>::Bucket::Bucket(size_t array_size, int depth) : size_(
 
 template <typename K, typename V>
 auto ExtendibleHashTable<K, V>::Bucket::Find(const K &key, V &value) -> bool {
+  std::shared_lock lock(mutex_);
   return std::any_of(list_.begin(), list_.end(), [&key, &value](const auto &item) {
     if (item.first == key) {
       value = item.second;
@@ -168,6 +173,7 @@ auto ExtendibleHashTable<K, V>::Bucket::Find(const K &key, V &value) -> bool {
 
 template <typename K, typename V>
 auto ExtendibleHashTable<K, V>::Bucket::Remove(const K &key) -> bool {
+  std::unique_lock lock(mutex_);
   return std::any_of(list_.begin(), list_.end(), [&key, this](const auto &item) {
     if (item.first == key) {
       this->list_.remove(item);
@@ -179,10 +185,17 @@ auto ExtendibleHashTable<K, V>::Bucket::Remove(const K &key) -> bool {
 
 template <typename K, typename V>
 auto ExtendibleHashTable<K, V>::Bucket::Insert(const K &key, const V &value) -> bool {
-  if (IsFull()) {
+  std::unique_lock lock(mutex_);
+  for (auto &[k, v] : list_) {                                      // 少了更新
+    if (k == key) {
+      v = value;
+      return true;
+    }
+  }
+  if (IsFullWithGuard()) {                                          // 链表满了
     return false;
   }
-  list_.emplace_back(key, value);  // 内存泄漏
+  list_.emplace_back(key, value);                              // 插入的情况
   return true;
 }
 

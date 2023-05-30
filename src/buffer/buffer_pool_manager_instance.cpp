@@ -40,146 +40,164 @@ BufferPoolManagerInstance::~BufferPoolManagerInstance() {
 }
 
 auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
-  std::scoped_lock<std::mutex> lock(latch_);
-
-  bool is_free_page = false;  // 给is_free_page设初值false
-
-  for (size_t i = 0; i < pool_size_; i++) {  // 遍历所有页面，将没被pin(使用)的页面设置为空页
-    if (pages_[i].GetPinCount() == 0) {
-      is_free_page = true;
-      break;
+  std::lock_guard lock(latch_);
+  frame_id_t frame_id = -1;
+  Page *page = nullptr;
+  // You should pick the replacement frame from either the free list or the replacer
+  // (always find from the free list first)
+    if (!free_list_.empty()) {
+        frame_id = free_list_.front();
+        free_list_.pop_front();
+        page = pages_ + frame_id;
+    } else if (replacer_->Evict(&frame_id)){
+        page = pages_ + frame_id;
+        page_table_->Remove(page->GetPageId());
+        // If the replacement frame has a dirty page, you should write it back to the disk first.
+        // You also need to reset the memory and metadata for the new page.
+        if (page->IsDirty()) {
+            disk_manager_->WritePage(page->GetPageId(), page->GetData());
+            ResetPage(page);
+        }
     }
-  }
+    if (page != nullptr) {
+        // Create a new page in the buffer pool
+        page->page_id_ = AllocatePage();
+        // Set page_id to the new page's id
+        *page_id = page->page_id_;
 
-  if (!is_free_page) {  // 若所有页面都被pin则说明没有页可用
-    return nullptr;
-  }
-
-  *page_id = AllocatePage();
-
-  frame_id_t frame_id;
-
-  if (!free_list_.empty()) {  // 从空闲页列表里面找
-    frame_id = free_list_.front();
-    free_list_.pop_front();
-  } else {  // 没找到空闲页,从lru_k里面驱逐的拿
-    // assert(replacer_->Evict(&frame_id));
-    replacer_->Evict(&frame_id);  // 按照lru_k驱逐一个页面，frame_id变为剔除页id
-    page_id_t evicted_page_id = pages_[frame_id].GetPageId();
-
-    if (pages_[frame_id].IsDirty()) {
-      disk_manager_->WritePage(evicted_page_id, pages_[frame_id].GetData());  // 刷回磁盘
-      pages_[frame_id].is_dirty_ = false;
+        page_table_->Insert(page->page_id_, frame_id);
+        // remember to record the access history of the frame in the replacer for the lru-k algorithm to work.
+        replacer_->RecordAccess(frame_id);
+        // Remember to "Pin" the frame by calling replacer.SetEvictable(frame_id, false)
+        // so that the replacer wouldn't evict the frame before the buffer pool manager "Unpin"s it.
+        replacer_->SetEvictable(frame_id, false);
+        page->pin_count_++;
+        // LOG_DEBUG("page %d pin_count +1 = %d", *page_id, page->pin_count_);
     }
+    // LOG_INFO("new page %d", *page_id);
+    return page;
 
-    pages_[frame_id].ResetMemory();  // 页空间内存释放为变成新空间
-
-    page_table_->Remove(evicted_page_id);  // 从页空间表中删除被驱逐页
-  }
-
-  page_table_->Insert(*page_id, frame_id);  // frame_id(磁盘)和page_id(内存)在页空间对应
-
-  pages_[frame_id].page_id_ = *page_id;  // 设置新页的id为传入id
-  pages_[frame_id].pin_count_ = 1;       // 将新页的pin标识符置一
-
-  replacer_->RecordAccess(frame_id);         // lru记录更新
-  replacer_->SetEvictable(frame_id, false);  // 设置该页面不可驱逐
-
-  return &pages_[frame_id];
 }
 
 auto BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) -> Page * {
-  std::scoped_lock<std::mutex> lock(latch_);
-
-  frame_id_t frame_id;
+  assert(page_id != INVALID_PAGE_ID);
+  std::lock_guard lock(latch_);
+  Page *page = nullptr;
+  frame_id_t frame_id = -1;
+  // First search for page_id in the buffer pool.
   if (page_table_->Find(page_id, frame_id)) {  // 找到该page页拿到frame_id
-    pages_[frame_id].pin_count_++;             // pin住
-    replacer_->RecordAccess(frame_id);         // 刷新lru
-    replacer_->SetEvictable(frame_id, false);  // 设置不可剔除
-    return &pages_[frame_id];
+    page = pages_ + frame_id;
+    // disable eviction and record the access history of the frame
+    replacer_->RecordAccess(frame_id);
+    replacer_->SetEvictable(frame_id, false);
+    page->pin_count_++;
+    // LOG_INFO("fetch page %d pin_count %d", page_id, page->pin_count_);
+    // LOG_DEBUG("page %d pin_count +1 = %d", page_id, page->pin_count_);
+    return page;
   }
-
-  bool is_free_page = false;  // 设置非空页       // 从这往下和newPgImp一样
-
-  for (size_t i = 0; i < pool_size_; i++) {  // 遍历查看是否有空闲页（一直更新）
-    if (pages_[i].GetPinCount() == 0) {
-      is_free_page = true;
-      break;
-    }
-  }
-
-  if (!is_free_page) {
-    return nullptr;
-  }
-
-  if (!free_list_.empty()) {
-    frame_id = free_list_.front();
-    free_list_.pop_front();
-  } else {
-    // assert(replacer_->Evict(&frame_id));
-    replacer_->Evict(&frame_id);
-    page_id_t evicted_page_id = pages_[frame_id].GetPageId();
-
-    if (pages_[frame_id].IsDirty()) {
-      disk_manager_->WritePage(evicted_page_id, pages_[frame_id].GetData());
-      pages_[frame_id].is_dirty_ = false;
+    // If not found, pick a replacement frame from either the free list or the replacer
+    // (always find from the free list first
+    if (!free_list_.empty()) {
+        frame_id = free_list_.front();
+        free_list_.pop_front();
+        page = pages_ + frame_id;
+    } else if(replacer_->Evict(&frame_id)) {
+        page = pages_ + frame_id;
+        // replace the old page in the frame.
+        page_table_->Remove(page->GetPageId());
+        if (page->IsDirty()) {
+            disk_manager_->WritePage(page->GetPageId(), page->GetData());
+            ResetPage(page);
+        }
     }
 
-    pages_[frame_id].ResetMemory();
+    if (page != nullptr) {
+        // read the page from disk by calling disk_manager_->ReadPage()
+        disk_manager_->ReadPage(page_id, page->GetData());
 
-    page_table_->Remove(evicted_page_id);
-  }
+        page->pin_count_++;
+        page->page_id_ = page_id;
 
-  page_table_->Insert(page_id, frame_id);
-
-  pages_[frame_id].page_id_ = page_id;
-  pages_[frame_id].pin_count_ = 1;
-
-  disk_manager_->ReadPage(page_id, pages_[frame_id].GetData());
-
-  replacer_->RecordAccess(frame_id);
-  replacer_->SetEvictable(frame_id, false);
-
-  return &pages_[frame_id];
+        page_table_->Insert(page_id, frame_id);
+        // disable eviction and record the access history of the frame
+        replacer_->SetEvictable(frame_id, false);
+        replacer_->RecordAccess(frame_id);
+        // LOG_DEBUG("page %d pin_count +1 = %d", page_id, page->pin_count_);
+    }
+    // Return nullptr if page_id needs to be fetched from the disk
+    // but all frames are currently in use and not evictable(in another word, pinned).
+    return page;
 }
 
 auto BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) -> bool {
-  std::scoped_lock<std::mutex> lock(latch_);
+    std::scoped_lock<std::mutex> lock(latch_);
 
-  frame_id_t frame_id;
-  if (!page_table_->Find(page_id, frame_id)) {
-    return false;
-  }
+    frame_id_t frame_id;
+    if (!page_table_->Find(page_id, frame_id)) {
+        return false;
+    }
 
-  if (pages_[frame_id].GetPinCount() <= 0) {
-    return false;
-  }
+    if (pages_[frame_id].GetPinCount() <= 0) {
+        return false;
+    }
 
-  if (is_dirty) {
-    pages_[frame_id].is_dirty_ = is_dirty;
-  }
+    if (is_dirty) {
+        pages_[frame_id].is_dirty_ = is_dirty;
+    }
 
-  pages_[frame_id].pin_count_--;
+    pages_[frame_id].pin_count_--;
 
-  if (pages_[frame_id].pin_count_ == 0) {
-    replacer_->SetEvictable(frame_id, true);
-  }
+    if (pages_[frame_id].pin_count_ == 0) {
+        replacer_->SetEvictable(frame_id, true);
+    }
 
-  return true;
+    return true;
 }
+//auto BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) -> bool {
+//  std::lock_guard lock(latch_);
+//  frame_id_t frame_id = -1;
+//  // If page_id is not in the buffer pool
+//  if (!page_table_->Find(page_id, frame_id)) {
+//    // LOG_WARN("\033[1;31m page %d unpin false! \033[0m", page_id);
+//    return false;
+//  }
+//  Page *page = pages_ + frame_id;
+//  // its pin count is already 0, return false.
+//  if (page->GetPinCount() <= 0) {
+//    // LOG_WARN("\033[1;31m page %d pin_count already <= 0! \033[0m" page_id);
+//    // assert(false);
+//    return false;
+//  }
+//  // is_dirty true if the page should be marked as dirty, false otherwise
+//  if (is_dirty) {
+//      page->is_dirty_ = true;
+//  }
+//
+//    --page->pin_count_;
+//  // Decrement the pin count of a page. If the pin count reaches 0, the frame should be evictable by the replacer.
+//  if (page->pin_count_ == 0) {
+//    // LOG_DEBUG("page %d pin_count %d evitable!", page_id, page->pin_count_);
+//    replacer_->SetEvictable(frame_id, true);
+//  }
+//  // LOG_INFO("unpin page %d pin_count %d",  page_id, page->pin_count_);
+//  return true;
+//}
 
 auto BufferPoolManagerInstance::FlushPgImp(page_id_t page_id) -> bool {
   if (page_id == INVALID_PAGE_ID) {
     return false;
   }
-
-  frame_id_t frame_id;
-
+  std::lock_guard lock(latch_);
+  frame_id_t frame_id = -1;
+  // false if the page could not be found in the page table
   if (!page_table_->Find(page_id, frame_id)) {
+    // assert(false && "cant found");
     return false;
   }
-
-  disk_manager_->WritePage(page_id, pages_[frame_id].data_);  // 为什么不是GetData()?
+  // Use the DiskManager::WritePage() method to flush a page to disk.
+  disk_manager_->WritePage(page_id, pages_[frame_id].data_);
+  // Unset the dirty flag of the page after flushing.
+  pages_[frame_id].is_dirty_ = false;
   return true;
 }
 
@@ -191,28 +209,26 @@ void BufferPoolManagerInstance::FlushAllPgsImp() {
 }
 
 auto BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) -> bool {
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::lock_guard lock(latch_);
   frame_id_t frame_id;
-
+  // If page_id is not in the buffer pool, do nothing and return true.
   if (!page_table_->Find(page_id, frame_id)) {
     return true;  // bug     false改true
   }
-
+  // If the page is pinned and cannot be deleted, return false immediately.
   if (pages_[frame_id].GetPinCount() > 0) {
     return false;
   }
-
-  replacer_->Remove(frame_id);
-
-  pages_[frame_id].ResetMemory();
-  pages_[frame_id].page_id_ = INVALID_PAGE_ID;
-  pages_[frame_id].pin_count_ = 0;
-  pages_[frame_id].is_dirty_ = false;
-
+  // After deleting the page from the page table, stop tracking the frame
+  // in the replacer and add the frame back to the free list.
   page_table_->Remove(page_id);
+  replacer_->Remove(frame_id);
   free_list_.push_back(frame_id);
+  // reset the page's memory and metadata. Finally, you should call DeallocatePage() to
+  // imitate freeing the page on the disk.
+  ResetPage(&pages_[frame_id]);
   DeallocatePage(page_id);
-
+  // LOG_INFO("\033[1;31m page %d delete!\033[0m",  page_id);
   return true;
 }
 
