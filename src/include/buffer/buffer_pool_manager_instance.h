@@ -189,15 +189,15 @@ class BufferPoolManagerInstance : public BufferPoolManager {
    * @brief Deallocate a page on disk. Caller should acquire the latch before calling this function.
    * @param page_id id of the page to deallocate
    */
-  void DeallocatePage(page_id_t page_id) {
+  void DeallocatePage([[maybe_unused]] page_id_t page_id) {
     // This is a no-nop right now without a more complex data structure to track deallocated pages
   }
 
   // TODO(student): You may add additional private members and helper functions
   void ResetPage(Page *page) {
-      page->ResetMemory();
-      page->is_dirty_ = false;
-      page->page_id_ = INVALID_PAGE_ID;
+    page->ResetMemory();
+    page->is_dirty_ = false;
+    page->page_id_ = INVALID_PAGE_ID;
   }
 };
 }  // namespace bustub

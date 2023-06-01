@@ -16,9 +16,9 @@
 #include <limits>
 #include <list>
 #include <mutex>  // NOLINT
+#include <set>
 #include <unordered_map>
 #include <vector>
-#include <set>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -139,14 +139,14 @@ class LRUKReplacer {
   // Remove maybe_unused if you start using them.
   // size_t current_timestamp_{0};
   struct Node {
-      frame_id_t id_;
-      int64_t time_;
-      Node(frame_id_t id, time_t time) : id_(id), time_(time) {}
-      auto operator<(const Node &rhs) const ->bool {return time_ < rhs.time_; }
+    frame_id_t id_;
+    int64_t time_;
+    Node(frame_id_t id, time_t time) : id_(id), time_(time) {}
+    auto operator<(const Node &rhs) const -> bool { return time_ < rhs.time_; }
   };
   size_t current_timestamp_{0};
-  size_t cur_size_{0};         // 可驱逐大小
-  size_t replacer_size_;       // 剩余容量
+  size_t cur_size_{0};    // 可驱逐大小
+  size_t replacer_size_;  // 剩余容量
   size_t k_;
   std::mutex latch_;
 
@@ -160,9 +160,8 @@ class LRUKReplacer {
   auto InsertToSet(frame_id_t frame_id) -> void;
   auto RemoveFromSet(frame_id_t frame_id) -> void;
   auto RemoveRecord(frame_id_t frame_id) -> void;
-  auto EvitFromSet(std::set<Node> &set_, frame_id_t *frame_id) -> bool;
+  auto EvitFromSet(std::set<Node> *set_, frame_id_t *frame_id) -> bool;
   auto GetTimeStamp() -> int64_t;
-
 };
 
 }  // namespace bustub

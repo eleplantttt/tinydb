@@ -167,7 +167,6 @@ class ExtendibleHashTable : public HashTable<K, V> {
      */
     auto Insert(const K &key, const V &value) -> bool;
 
-
    private:
     size_t size_;
     int depth_;
@@ -176,13 +175,11 @@ class ExtendibleHashTable : public HashTable<K, V> {
   };
 
  private:
-
   int global_depth_;    // The global depth of the directory
   size_t bucket_size_;  // The size of a bucket
   int num_buckets_;     // The number of buckets in the hash table
   mutable std::shared_mutex latch_;
   std::vector<std::shared_ptr<Bucket>> dir_;  // The directory of the hash table
-
 
   /**
    * @brief Redistribute the kv pairs in a full bucket.
@@ -202,11 +199,10 @@ class ExtendibleHashTable : public HashTable<K, V> {
    */
 
   auto IndexOf(const K &key) -> size_t;
-  auto CalIndex(size_t &idx, int depth) ->size_t;
+  auto CalIndex(const size_t &idx, int depth) -> size_t;
   auto GetGlobalDepthInternal() const -> int;
   auto GetLocalDepthInternal(int dir_index) const -> int;
   auto GetNumBucketsInternal() const -> int;
 };
-
 
 }  // namespace bustub
