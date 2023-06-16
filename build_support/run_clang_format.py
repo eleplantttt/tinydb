@@ -101,13 +101,13 @@ if __name__ == "__main__":
         "with the existing file, outputting a unifiied diff if "
         "there are any necessary changes")
     parser.add_argument("clang_format_binary",
-                        help="Path to the clang-format binary")
+                        help="Path to the clang-format binary", )
     parser.add_argument("exclude_globs",
                         help="Filename containing globs for files "
                         "that should be excluded from the checks")
     parser.add_argument("--source_dirs",
                         help="Comma-separated root directories of the code")
-    parser.add_argument("--fix", default=False,
+    parser.add_argument("--fix", default=True,
                         action="store_true",
                         help="If specified, will re-format the source "
                         "code instead of comparing the re-formatted "

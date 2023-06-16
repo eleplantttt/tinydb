@@ -42,8 +42,32 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   void SetKeyAt(int index, const KeyType &key);
   auto ValueAt(int index) const -> ValueType;
 
+
+  void SetValueAt(int index, const ValueType &value);
+
+  auto InsertAt(int index, const KeyType &key, const ValueType &value) -> void;
+
+  // @brief find the first element >= key
+  auto LowerBound(const KeyType &key, const KeyComparator &cmp) -> int;
+
+  auto Search(const KeyType &key, const KeyComparator &cmp) -> int;
+
+  auto FindIndex(const ValueType &value) -> int;
+
+  void Split(BPlusTreeInternalPage *new_node, const KeyType &key, const ValueType &value,
+             const KeyComparator &comparator);
+
+  void ShiftLeft(int i = 0);
+  void ShiftRight();
+
+  void Copy(const BPlusTreeInternalPage *src, int result, int first, int last);
+  void Copy(const std::vector<MappingType> &src, int result, int first, int last);
+
  private:
+  // @brief find the first element > key
+  auto UpperBound(const KeyType &key, const KeyComparator &cmp) -> int;
   // Flexible array member for page data.
   MappingType array_[1];
 };
+
 }  // namespace bustub
