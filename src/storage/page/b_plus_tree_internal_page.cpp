@@ -169,4 +169,6 @@ template class BPlusTreeInternalPage<GenericKey<8>, page_id_t, GenericComparator
 template class BPlusTreeInternalPage<GenericKey<16>, page_id_t, GenericComparator<16>>;
 template class BPlusTreeInternalPage<GenericKey<32>, page_id_t, GenericComparator<32>>;
 template class BPlusTreeInternalPage<GenericKey<64>, page_id_t, GenericComparator<64>>;
+template class BPlusTreeInternalPage<int, int, std::less<>>;
+
 }  // namespace bustub
