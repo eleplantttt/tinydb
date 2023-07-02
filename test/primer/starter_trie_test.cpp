@@ -23,7 +23,7 @@
 namespace bustub {
 
 // Generate n random strings
-std::vector<std::string> GenerateNRandomString(int n) {
+auto GenerateNRandomString(int n) -> std::vector<std::string> {
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<char> char_dist('A', 'z');

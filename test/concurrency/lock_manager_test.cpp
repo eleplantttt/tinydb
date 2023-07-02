@@ -32,7 +32,7 @@ void CheckTxnRowLockSize(Transaction *txn, table_oid_t oid, size_t shared_size, 
   EXPECT_EQ((*(txn->GetExclusiveRowLockSet()))[oid].size(), exclusive_size);
 }
 
-int GetTxnTableLockSize(Transaction *txn, LockManager::LockMode lock_mode) {
+auto GetTxnTableLockSize(Transaction *txn, LockManager::LockMode lock_mode) -> int {
   switch (lock_mode) {
     case LockManager::LockMode::SHARED:
       return txn->GetSharedTableLockSet()->size();

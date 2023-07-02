@@ -10,14 +10,19 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include <mutex>  // NOLINT
 #include <queue>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "common/config.h"
 #include "concurrency/transaction.h"
 #include "storage/index/index_iterator.h"
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
+#include "storage/page/b_plus_tree_page.h"
+#include "storage/page/page.h"
 
 namespace bustub {
 
@@ -33,7 +38,7 @@ namespace bustub {
  * (3) The structure should shrink and grow dynamically
  * (4) Implement index iterator for range scan
  */
-//INDEX_TEMPLATE_ARGUMENTS
+// INDEX_TEMPLATE_ARGUMENTS
 template <typename KeyType, typename ValueType, typename KeyComparator>
 class BPlusTree {
   using InternalPage = BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>;
@@ -51,7 +56,7 @@ class BPlusTree {
   auto IsEmpty() const -> bool;
 
   // Insert a key-value pair into this B+ tree.
-  auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
+  auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool;
 
   // Remove a key and its value from this B+ tree.
   void Remove(const KeyType &key, Transaction *transaction = nullptr);
@@ -78,6 +83,8 @@ class BPlusTree {
 
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
+
+  auto GetLevel() const -> int;
 
  private:
   auto IsSafe(BPlusTreePage *node, OpeType operation) -> bool;
@@ -120,7 +127,6 @@ class BPlusTree {
   auto NewInternalRootPage(page_id_t *page_id) -> Page *;
 
   void UpdateRootPageId(int insert_record = 0);
-
   /* Debug Routines for FREE!! */
   void ToGraph(BPlusTreePage *page, BufferPoolManager *bpm, std::ofstream &out) const;
 
@@ -148,6 +154,5 @@ class BPlusTree {
 
   RootMutex root_latch_;  // guard root_page / root_page_id
 };
-
 
 }  // namespace bustub

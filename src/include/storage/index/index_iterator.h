@@ -36,9 +36,7 @@ class IndexIterator {
   IndexIterator(page_id_t page_id, int position, BufferPoolManager *buffer_pool_manager, MappingType value);
   IndexIterator(const IndexIterator &x);
 
-  ~IndexIterator();  // NOLINT
-
-  auto IsEnd() -> bool;
+  ~IndexIterator();
 
   auto operator*() -> const MappingType &;
 
@@ -50,8 +48,9 @@ class IndexIterator {
 
   auto operator!=(const IndexIterator &itr) const -> bool { return !operator==(itr); }
 
+  auto IsEnd() -> bool;
+
  private:
-  // add your own private member variables here
   // Tree *tree_{};
   // add your own private member variables here
   page_id_t page_id_{INVALID_PAGE_ID};

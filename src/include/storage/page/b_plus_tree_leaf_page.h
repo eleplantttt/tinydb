@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "storage/page/b_plus_tree_page.h"
+#include "storage/page/hash_table_page_defs.h"
 
 namespace bustub {
 
@@ -39,7 +40,7 @@ namespace bustub {
  * | ParentPageId (4) | PageId (4) | NextPageId (4)
  *  -----------------------------------------------
  */
-INDEX_TEMPLATE_ARGUMENTS
+template <typename KeyType, typename ValueType, typename KeyComparator>
 class BPlusTreeLeafPage : public BPlusTreePage {
  public:
   // After creating a new leaf page from buffer pool, must call initialize
@@ -71,9 +72,10 @@ class BPlusTreeLeafPage : public BPlusTreePage {
 
  private:
   page_id_t next_page_id_;
-
   // Flexible array member for page data.
-  // keyType , valueType = record id
+
+  // keyType , valuetype = record id
   MappingType array_[1];
 };
+
 }  // namespace bustub
