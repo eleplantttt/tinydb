@@ -16,7 +16,7 @@
 #include "concurrency/lock_manager.h"
 #include "concurrency/transaction.h"
 
-
+// #define SEQNLOCK
 
 namespace bustub {
 
@@ -64,7 +64,7 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     }
     // fmt::print("SeqScanExecutor::Next {}\n", tuple->ToString(&plan_->OutputSchema()));
 
-    return false;
+    return true;
   }
 
   if (cur_page_id_ != INVALID_PAGE_ID) {

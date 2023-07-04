@@ -18,6 +18,8 @@
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/insert_plan.h"
+#include "storage/index/index.h"
+#include "storage/table/table_heap.h"
 #include "storage/table/tuple.h"
 
 namespace bustub {
@@ -49,7 +51,7 @@ class InsertExecutor : public AbstractExecutor {
    * NOTE: InsertExecutor::Next() does not use the `rid` out-parameter.
    * NOTE: InsertExecutor::Next() returns true with number of inserted rows produced only once.
    */
-  auto Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool override;
+  auto Next(Tuple *tuple, RID *rid) -> bool override;
 
   /** @return The output schema for the insert */
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
@@ -57,6 +59,14 @@ class InsertExecutor : public AbstractExecutor {
  private:
   /** The insert plan node to be executed*/
   const InsertPlanNode *plan_;
+
+  /** The exactly one child producing values to be inserted into the table. */
+  std::unique_ptr<AbstractExecutor> child_executor_;
+
+  bool inserted_{};
+
+  void LockTable();
+  void LockRow(const RID &rid);
 };
 
 }  // namespace bustub
