@@ -17,6 +17,8 @@
 #include <utility>
 #include <vector>
 
+#include "catalog/catalog.h"
+#include "common/logger.h"
 #include "common/util/hash_util.h"
 #include "container/hash/hash_function.h"
 #include "execution/executor_context.h"
@@ -24,6 +26,7 @@
 #include "execution/expressions/abstract_expression.h"
 #include "execution/plans/aggregation_plan.h"
 #include "storage/table/tuple.h"
+#include "type/value.h"
 #include "type/value_factory.h"
 
 namespace bustub {
@@ -41,6 +44,10 @@ class SimpleAggregationHashTable {
   SimpleAggregationHashTable(const std::vector<AbstractExpressionRef> &agg_exprs,
                              const std::vector<AggregationType> &agg_types)
       : agg_exprs_{agg_exprs}, agg_types_{agg_types} {}
+
+  // When performing aggregation on an empty table, CountStarAggregate
+  // should return zero and all other aggregate types should return integer_null.
+  // This is why GenerateInitialAggregateValue initializes most aggregate values as NULL.
 
   /** @return The initial aggregrate value for this aggregation executor */
   auto GenerateInitialAggregateValue() -> AggregateValue {
@@ -72,17 +79,41 @@ class SimpleAggregationHashTable {
    */
   void CombineAggregateValues(AggregateValue *result, const AggregateValue &input) {
     for (uint32_t i = 0; i < agg_exprs_.size(); i++) {
+      auto &result_agg = result->aggregates_[i];
+      auto &input_agg = input.aggregates_[i];
+
+
+      if (input_agg.IsNull()) {
+        continue ;
+      }
+
+      if (result_agg.IsNull()) {
+        if (agg_types_[i] == AggregationType::CountAggregate) {
+          result_agg = ValueFactory::GetIntegerValue(1);
+        } else {
+          result_agg = input_agg;
+        }
+        continue;
+      }
       switch (agg_types_[i]) {
         case AggregationType::CountStarAggregate:
         case AggregationType::CountAggregate:
+          result_agg = result_agg.Add(ValueFactory::GetIntegerValue(1));
+          break ;
         case AggregationType::SumAggregate:
+          result_agg = result_agg.Add(input_agg);
+          break ;
         case AggregationType::MinAggregate:
+          result_agg = result_agg.Min(input_agg);
+          break ;
         case AggregationType::MaxAggregate:
+          result_agg = result_agg.Max(input_agg);
           break;
       }
     }
   }
 
+  void MakeEmpty(const AggregateKey &agg_key) { ht_.insert({agg_key, GenerateInitialAggregateValue()}); }
   /**
    * Inserts a value into the hash table and then combines it with the current aggregation.
    * @param agg_key the key to be inserted
@@ -135,6 +166,10 @@ class SimpleAggregationHashTable {
   /** @return Iterator to the end of the hash table */
   auto End() -> Iterator { return Iterator{ht_.cend()}; }
 
+  auto Empty() -> bool { return ht_.empty(); }
+
+  auto Size() -> int { return ht_.size(); }
+
  private:
   /** The hash table is just a map from aggregate keys to aggregate values */
   std::unordered_map<AggregateKey, AggregateValue> ht_{};
@@ -181,7 +216,7 @@ class AggregationExecutor : public AbstractExecutor {
   auto MakeAggregateKey(const Tuple *tuple) -> AggregateKey {
     std::vector<Value> keys;
     for (const auto &expr : plan_->GetGroupBys()) {
-      keys.emplace_back(expr->Evaluate(tuple, child_->GetOutputSchema()));
+      keys.emplace_back(expr->Evaluate(tuple, child_executor_->GetOutputSchema()));
     }
     return {keys};
   }
@@ -190,7 +225,7 @@ class AggregationExecutor : public AbstractExecutor {
   auto MakeAggregateValue(const Tuple *tuple) -> AggregateValue {
     std::vector<Value> vals;
     for (const auto &expr : plan_->GetAggregates()) {
-      vals.emplace_back(expr->Evaluate(tuple, child_->GetOutputSchema()));
+      vals.emplace_back(expr->Evaluate(tuple, child_executor_->GetOutputSchema()));
     }
     return {vals};
   }
@@ -199,10 +234,10 @@ class AggregationExecutor : public AbstractExecutor {
   /** The aggregation plan node */
   const AggregationPlanNode *plan_;
   /** The child executor that produces tuples over which the aggregation is computed */
-  std::unique_ptr<AbstractExecutor> child_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
   /** Simple aggregation hash table */
-  // TODO(Student): Uncomment SimpleAggregationHashTable aht_;
+  SimpleAggregationHashTable aht_;
   /** Simple aggregation hash table iterator */
-  // TODO(Student): Uncomment SimpleAggregationHashTable::Iterator aht_iterator_;
+  SimpleAggregationHashTable::Iterator aht_iterator_;
 };
 }  // namespace bustub
