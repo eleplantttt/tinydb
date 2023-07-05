@@ -44,5 +44,14 @@ class IndexScanExecutor : public AbstractExecutor {
  private:
   /** The index scan plan node to be executed. */
   const IndexScanPlanNode *plan_;
+  const IndexInfo *index_info_;
+  const TableInfo *table_info_;
+  IndexIterator<bustub::GenericKey<4>, bustub::RID, bustub::GenericComparator<4>> cur_;
+  bool scaned_;
+
+  void LockTable();
+  void UnLockTable();
+  void LockRow(const RID &rid);
+  void UnLockRow(const RID &rid);
 };
 }  // namespace bustub

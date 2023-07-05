@@ -44,6 +44,8 @@ class IndexScanPlanNode : public AbstractPlanNode {
   index_oid_t index_oid_;
 
   // Add anything you want here for index lookup
+  // col = xxxx
+  AbstractExpressionRef filter_predicate_;
 
  protected:
   auto PlanNodeToString() const -> std::string override {
