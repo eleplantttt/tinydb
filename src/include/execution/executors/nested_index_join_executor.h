@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "catalog/catalog.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/expressions/abstract_expression.h"
@@ -47,8 +48,12 @@ class NestIndexJoinExecutor : public AbstractExecutor {
 
   auto Next(Tuple *tuple, RID *rid) -> bool override;
 
+  auto GenerateValue(const Tuple *left_tuple, const Schema &left_schema, const Tuple *right_tuple,
+                     const Schema &right_schema) -> std::vector<Value>;
+
  private:
   /** The nested index join plan node. */
   const NestedIndexJoinPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
 };
 }  // namespace bustub
