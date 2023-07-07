@@ -12,9 +12,10 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
-
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/seq_scan_plan.h"
@@ -52,5 +53,9 @@ class SortExecutor : public AbstractExecutor {
  private:
   /** The sort plan node to be executed */
   const SortPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
+  std::vector<std::pair<Tuple, RID>> result_;
+  uint64_t cur_;
+  bool sorted_;
 };
 }  // namespace bustub
