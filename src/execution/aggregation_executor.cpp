@@ -53,7 +53,7 @@ auto AggregationExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     if (!plan_->GetGroupBys().empty()) {
       values = aht_iterator_.Key().group_bys_;
     }
-    values.insert(values.end(), aht_iterator_.Val().aggregates_.begin(),aht_iterator_.Val().aggregates_.end());
+    values.insert(values.end(), aht_iterator_.Val().aggregates_.begin(), aht_iterator_.Val().aggregates_.end());
     *tuple = Tuple{std::move(values), &plan_->OutputSchema()};
     ++aht_iterator_;
     return true;

@@ -26,16 +26,16 @@
 
 namespace bustub {
 IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanPlanNode *plan)
-    : AbstractExecutor(exec_ctx), 
+    : AbstractExecutor(exec_ctx),
       plan_(plan),
       index_info_(exec_ctx->GetCatalog()->GetIndex(plan->index_oid_)),
       table_info_(exec_ctx->GetCatalog()->GetTable(index_info_->table_name_)),
       scaned_(false) {}
 
-void IndexScanExecutor::Init() { 
+void IndexScanExecutor::Init() {
   auto *tree = dynamic_cast<BPlusTreeIndexForOneIntegerColumn *>(index_info_->index_.get());
   cur_ = tree->GetBeginIterator();
-  LockTable();
+  //  LockTable();
 }
 
 auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
@@ -51,110 +51,110 @@ auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
   TablePage *table_page{};
 
-//  if (plan_->filter_predicate_ != nullptr) {
-//    scaned_ = true;
-//    const auto *cmp_expr = static_cast<const ComparisonExpression *>(plan_->filter_predicate_.get());
-//    const auto *const_expr = static_cast<const ConstantValueExpression *>(cmp_expr->GetChildAt(1).get());
-//    std::vector<RID> result;
-//    Tuple key{{const_expr->val_}, &index_info_->key_schema_};
-//    index_info_->index_->ScanKey(key, &result, txn);
-//    //只有一个
-//    for (auto result_rid : result) {
-//      LockRow(result_rid);
-//      table_page = reinterpret_cast<TablePage*>(bpm->FetchPage(result_rid.GetPageId())->GetData());
-//      table_page->GetTuple(result_rid, tuple, txn, exec_ctx_->GetLockManager());
-//      *rid = result_rid;
-//      bpm->UnpinPage(result_rid.GetPageId(), false);
-//      UnLockRow(result_rid);
-//      UnLockTable();
-//      return true;
-//    }
-//    UnLockTable();
-//    return false;
-//  }
+  //  if (plan_->filter_predicate_ != nullptr) {
+  //    scaned_ = true;
+  //    const auto *cmp_expr = static_cast<const ComparisonExpression *>(plan_->filter_predicate_.get());
+  //    const auto *const_expr = static_cast<const ConstantValueExpression *>(cmp_expr->GetChildAt(1).get());
+  //    std::vector<RID> result;
+  //    Tuple key{{const_expr->val_}, &index_info_->key_schema_};
+  //    index_info_->index_->ScanKey(key, &result, txn);
+  //    //只有一个
+  //    for (auto result_rid : result) {
+  //      LockRow(result_rid);
+  //      table_page = reinterpret_cast<TablePage*>(bpm->FetchPage(result_rid.GetPageId())->GetData());
+  //      table_page->GetTuple(result_rid, tuple, txn, exec_ctx_->GetLockManager());
+  //      *rid = result_rid;
+  //      bpm->UnpinPage(result_rid.GetPageId(), false);
+  //      UnLockRow(result_rid);
+  //      UnLockTable();
+  //      return true;
+  //    }
+  //    UnLockTable();
+  //    return false;
+  //  }
 
   if (cur_ != end) {
     *rid = (*cur_).second;
     ++cur_;
 
-    LockRow(*rid);
+    //    LockRow(*rid);
     table_page = reinterpret_cast<TablePage *>(bpm->FetchPage(rid->GetPageId())->GetData());
     table_page->GetTuple(*rid, tuple, txn, exec_ctx_->GetLockManager());
     bpm->UnpinPage(rid->GetPageId(), false);
-    UnLockRow(*rid);
+    //    UnLockRow(*rid);
 
     return true;
   }
 
-  UnLockTable();
+  //  UnLockTable();
   return false;
 }
 
-void IndexScanExecutor::LockTable() {
-#ifndef INDEXNLOCK
-  const auto &lock_mgr = exec_ctx_->GetLockManager();
-  const auto &txn = exec_ctx_->GetTransaction();
-  const auto &oid = table_info_->oid_;
-  bool res = true;
-  try {
-    if (txn->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
-      if (!txn->IsTableIntentionExclusiveLocked(oid) && !txn->IsTableSharedIntentionExclusiveLocked(oid)) {
-        res = lock_mgr->LockTable(txn, LockManager::LockMode::INTENTION_SHARED, oid);
-      }
-    }
-    if (!res) {
-      assert(txn->GetState() == TransactionState::ABORTED);
-      throw ExecutionException("IndexScanExecutor::LockTable() lock fail");
-    }
-  } catch (TransactionAbortException &e) {
-    assert(txn->GetState() == TransactionState::ABORTED);
-    throw ExecutionException("IndexScanExecutor::LockTable() lock fail");
-  }
-#endif
-}
+// void IndexScanExecutor::LockTable() {
+// #ifndef INDEXNLOCK
+//  const auto &lock_mgr = exec_ctx_->GetLockManager();
+//  const auto &txn = exec_ctx_->GetTransaction();
+//  const auto &oid = table_info_->oid_;
+//  bool res = true;
+//  try {
+//    if (txn->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
+//      if (!txn->IsTableIntentionExclusiveLocked(oid) && !txn->IsTableSharedIntentionExclusiveLocked(oid)) {
+//        res = lock_mgr->LockTable(txn, LockManager::LockMode::INTENTION_SHARED, oid);
+//      }
+//    }
+//    if (!res) {
+//      assert(txn->GetState() == TransactionState::ABORTED);
+//      throw ExecutionException("IndexScanExecutor::LockTable() lock fail");
+//    }
+//  } catch (TransactionAbortException &e) {
+//    assert(txn->GetState() == TransactionState::ABORTED);
+//    throw ExecutionException("IndexScanExecutor::LockTable() lock fail");
+//  }
+// #endif
+//}
 
-void IndexScanExecutor::UnLockTable() {
-#ifndef INDEXNLOCK
-  const auto &lock_mgr = exec_ctx_->GetLockManager();
-  const auto &txn = exec_ctx_->GetTransaction();
-  const auto &oid = table_info_->oid_;
-  if (txn->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
-    if (txn->IsTableIntentionSharedLocked(oid)) {
-      lock_mgr->UnlockTable(txn, oid);
-    }
-  }
-#endif
-}
+// void IndexScanExecutor::UnLockTable() {
+// #ifndef INDEXNLOCK
+//  const auto &lock_mgr = exec_ctx_->GetLockManager();
+//  const auto &txn = exec_ctx_->GetTransaction();
+//  const auto &oid = table_info_->oid_;
+//  if (txn->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
+//    if (txn->IsTableIntentionSharedLocked(oid)) {
+//      lock_mgr->UnlockTable(txn, oid);
+//    }
+//  }
+// #endif
+//}
 
-void IndexScanExecutor::LockRow(const RID &rid) {
-#ifndef INDEXNLOCK
-  const auto &lock_mgr = exec_ctx_->GetLockManager();
-  const auto &txn = exec_ctx_->GetTransaction();
-  const auto &oid = table_info_->oid_;
-  bool res = true;
-  if (txn->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
-    if (!txn->IsRowExclusiveLocked(oid, rid)) {
-      res = lock_mgr->LockRow(txn, LockManager::LockMode::SHARED, oid, rid);
-    }
-  }
-  if (!res) {
-    txn->SetState(TransactionState::ABORTED);
-    throw ExecutionException("IndexScanExecutor::Next() lock fail");
-  }
-#endif
-}
+// void IndexScanExecutor::LockRow(const RID &rid) {
+// #ifndef INDEXNLOCK
+//  const auto &lock_mgr = exec_ctx_->GetLockManager();
+//  const auto &txn = exec_ctx_->GetTransaction();
+//  const auto &oid = table_info_->oid_;
+//  bool res = true;
+//  if (txn->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
+//    if (!txn->IsRowExclusiveLocked(oid, rid)) {
+//      res = lock_mgr->LockRow(txn, LockManager::LockMode::SHARED, oid, rid);
+//    }
+//  }
+//  if (!res) {
+//    txn->SetState(TransactionState::ABORTED);
+//    throw ExecutionException("IndexScanExecutor::Next() lock fail");
+//  }
+// #endif
+//}
 
-void IndexScanExecutor::UnLockRow(const RID &rid) {
-#ifndef INDEXNLOCK
-  const auto &lock_mgr = exec_ctx_->GetLockManager();
-  const auto &txn = exec_ctx_->GetTransaction();
-  const auto &oid = table_info_->oid_;
-  if (txn->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
-    if (txn->IsRowSharedLocked(oid, rid)) {
-      lock_mgr->UnlockRow(txn, oid, rid);
-    }
-  }
-#endif
-}
+// void IndexScanExecutor::UnLockRow(const RID &rid) {
+// #ifndef INDEXNLOCK
+//  const auto &lock_mgr = exec_ctx_->GetLockManager();
+//  const auto &txn = exec_ctx_->GetTransaction();
+//  const auto &oid = table_info_->oid_;
+//  if (txn->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
+//    if (txn->IsRowSharedLocked(oid, rid)) {
+//      lock_mgr->UnlockRow(txn, oid, rid);
+//    }
+//  }
+// #endif
+//}
 
 }  // namespace bustub

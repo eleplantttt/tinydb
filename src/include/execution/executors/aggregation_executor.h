@@ -82,9 +82,8 @@ class SimpleAggregationHashTable {
       auto &result_agg = result->aggregates_[i];
       auto &input_agg = input.aggregates_[i];
 
-
       if (input_agg.IsNull()) {
-        continue ;
+        continue;
       }
 
       if (result_agg.IsNull()) {
@@ -99,13 +98,13 @@ class SimpleAggregationHashTable {
         case AggregationType::CountStarAggregate:
         case AggregationType::CountAggregate:
           result_agg = result_agg.Add(ValueFactory::GetIntegerValue(1));
-          break ;
+          break;
         case AggregationType::SumAggregate:
           result_agg = result_agg.Add(input_agg);
-          break ;
+          break;
         case AggregationType::MinAggregate:
           result_agg = result_agg.Min(input_agg);
-          break ;
+          break;
         case AggregationType::MaxAggregate:
           result_agg = result_agg.Max(input_agg);
           break;

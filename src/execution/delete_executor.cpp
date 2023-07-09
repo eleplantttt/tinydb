@@ -30,7 +30,7 @@ DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *
 
 void DeleteExecutor::Init() {
   child_executor_->Init();
-  LockTable();
+  //  LockTable();
 }
 
 auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
@@ -45,7 +45,7 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   int cnt = 0;
 
   while (child_executor_->Next(&child_tuple, rid)) {
-    LockRow(*rid);
+    //    LockRow(*rid);
     auto status = table_info_->table_->MarkDelete(*rid, txn);
 
     if (status) {
@@ -65,44 +65,44 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   return true;
 }
 
-void DeleteExecutor::LockTable() {
-#ifndef DELETENLOCK
-  const auto &lock_mgr = exec_ctx_->GetLockManager();
-  const auto &txn = exec_ctx_->GetTransaction();
-  const auto &oid = plan_->table_oid_;
-  try {
-    bool res = true;
-    if (txn->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
-      res = lock_mgr->LockTable(txn, LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE, oid);
-    }
-    if (!res) {
-      assert(txn->GetState() == TransactionState::ABORTED);
-      throw ExecutionException("DeleteExecutor::LockTable fail");
-    }
-  } catch (TransactionAbortException &e) {
-    assert(txn->GetState() == TransactionState::ABORTED);
-    throw ExecutionException("DeleteExecutor::LockTable fail");
-  }
-#endif
-}
+// void DeleteExecutor::LockTable() {
+// #ifndef DELETENLOCK
+//  const auto &lock_mgr = exec_ctx_->GetLockManager();
+//  const auto &txn = exec_ctx_->GetTransaction();
+//  const auto &oid = plan_->table_oid_;
+//  try {
+//    bool res = true;
+//    if (txn->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
+//      res = lock_mgr->LockTable(txn, LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE, oid);
+//    }
+//    if (!res) {
+//      assert(txn->GetState() == TransactionState::ABORTED);
+//      throw ExecutionException("DeleteExecutor::LockTable fail");
+//    }
+//  } catch (TransactionAbortException &e) {
+//    assert(txn->GetState() == TransactionState::ABORTED);
+//    throw ExecutionException("DeleteExecutor::LockTable fail");
+//  }
+// #endif
+//}
 
-void DeleteExecutor::LockRow(const RID &rid) {
-#ifndef DELETENLOCK
-  const auto &txn = exec_ctx_->GetTransaction();
-  const auto &lock_mgr = exec_ctx_->GetLockManager();
-  const auto &oid = plan_->table_oid_;
-  bool res = true;
-  try {
-    res = lock_mgr->LockRow(txn, LockManager::LockMode::EXCLUSIVE, oid, rid);
-    if (!res) {
-      txn->SetState(TransactionState::ABORTED);
-      throw ExecutionException("DeleteExecutor::LockRow fail");
-    }
-  } catch (TransactionAbortException &e) {
-    assert(txn->GetState() == TransactionState::ABORTED);
-    throw ExecutionException("DeleteExecutor::LockRow fail");
-  }
-#endif
-}
+// void DeleteExecutor::LockRow(const RID &rid) {
+// #ifndef DELETENLOCK
+//  const auto &txn = exec_ctx_->GetTransaction();
+//  const auto &lock_mgr = exec_ctx_->GetLockManager();
+//  const auto &oid = plan_->table_oid_;
+//  bool res = true;
+//  try {
+//    res = lock_mgr->LockRow(txn, LockManager::LockMode::EXCLUSIVE, oid, rid);
+//    if (!res) {
+//      txn->SetState(TransactionState::ABORTED);
+//      throw ExecutionException("DeleteExecutor::LockRow fail");
+//    }
+//  } catch (TransactionAbortException &e) {
+//    assert(txn->GetState() == TransactionState::ABORTED);
+//    throw ExecutionException("DeleteExecutor::LockRow fail");
+//  }
+// #endif
+//}
 
 }  // namespace bustub

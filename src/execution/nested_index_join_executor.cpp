@@ -28,9 +28,7 @@ NestIndexJoinExecutor::NestIndexJoinExecutor(ExecutorContext *exec_ctx, const Ne
   }
 }
 
-void NestIndexJoinExecutor::Init() {
-  child_executor_->Init();
-}
+void NestIndexJoinExecutor::Init() { child_executor_->Init(); }
 
 auto NestIndexJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   auto *bpm = exec_ctx_->GetBufferPoolManager();

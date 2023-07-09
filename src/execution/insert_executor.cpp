@@ -32,7 +32,7 @@ InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *
 
 void InsertExecutor::Init() {
   child_executor_->Init();
-  LockTable();
+  //  LockTable();
 }
 
 auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
@@ -40,7 +40,6 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     return false;
   }
   inserted_ = true;
-
 
   Tuple child_tuple{};
   const auto &ctx = GetExecutorContext();
@@ -52,7 +51,7 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
   while (child_executor_->Next(&child_tuple, rid)) {
     const auto status = table_info->table_->InsertTuple(child_tuple, rid, txn);
-    LockRow(*rid);
+    //    LockRow(*rid);
     if (status) {
       cnt++;
       std::vector<IndexInfo *> index_infos = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
@@ -70,48 +69,48 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   return true;
 }
 
-void InsertExecutor::LockTable() {
-#ifndef INSERTNLOCK
-  const auto &lock_mgr = exec_ctx_->GetLockManager();
-  const auto &txn = exec_ctx_->GetTransaction();
-  const auto &oid = plan_->table_oid_;
-  try {
-    bool res = true;
-    if (txn->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
-      if (!txn->IsTableSharedIntentionExclusiveLocked(oid)) {
-        res = lock_mgr->LockTable(txn, LockManager::LockMode::INTENTION_EXCLUSIVE, oid);
-      }
-    } else {
-      res = lock_mgr->LockTable(txn, LockManager::LockMode::INTENTION_EXCLUSIVE, oid);
-    }
-    if (!res) {
-      assert(txn->GetState() == TransactionState::ABORTED);
-      throw ExecutionException("InsertExecutor::LockTable fail");
-    }
-  } catch (TransactionAbortException &e) {
-    assert(txn->GetState() == TransactionState::ABORTED);
-    throw ExecutionException("InsertExecutor::LockTable fail");
-  }
-#endif
-}
+// void InsertExecutor::LockTable() {
+// #ifndef INSERTNLOCK
+//  const auto &lock_mgr = exec_ctx_->GetLockManager();
+//  const auto &txn = exec_ctx_->GetTransaction();
+//  const auto &oid = plan_->table_oid_;
+//  try {
+//    bool res = true;
+//    if (txn->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
+//      if (!txn->IsTableSharedIntentionExclusiveLocked(oid)) {
+//        res = lock_mgr->LockTable(txn, LockManager::LockMode::INTENTION_EXCLUSIVE, oid);
+//      }
+//    } else {
+//      res = lock_mgr->LockTable(txn, LockManager::LockMode::INTENTION_EXCLUSIVE, oid);
+//    }
+//    if (!res) {
+//      assert(txn->GetState() == TransactionState::ABORTED);
+//      throw ExecutionException("InsertExecutor::LockTable fail");
+//    }
+//  } catch (TransactionAbortException &e) {
+//    assert(txn->GetState() == TransactionState::ABORTED);
+//    throw ExecutionException("InsertExecutor::LockTable fail");
+//  }
+// #endif
+//}
 
-void InsertExecutor::LockRow(const RID &rid) {
-#ifndef INSERTNLOCK
-  const auto &txn = exec_ctx_->GetTransaction();
-  const auto &lock_mgr = exec_ctx_->GetLockManager();
-  const auto &oid = plan_->table_oid_;
-  try {
-    bool res = true;
-    res = lock_mgr->LockRow(txn, LockManager::LockMode::EXCLUSIVE, oid, rid);
-    if (!res) {
-      txn->SetState(TransactionState::ABORTED);
-      throw ExecutionException("InsertExecutor::LockRow fail");
-    }
-  } catch (TransactionAbortException &e) {
-    assert(txn->GetState() == TransactionState::ABORTED);
-    throw ExecutionException("InsertExecutor::LockRow fail");
-  }
-#endif
-}
+// void InsertExecutor::LockRow(const RID &rid) {
+// #ifndef INSERTNLOCK
+//  const auto &txn = exec_ctx_->GetTransaction();
+//  const auto &lock_mgr = exec_ctx_->GetLockManager();
+//  const auto &oid = plan_->table_oid_;
+//  try {
+//    bool res = true;
+//    res = lock_mgr->LockRow(txn, LockManager::LockMode::EXCLUSIVE, oid, rid);
+//    if (!res) {
+//      txn->SetState(TransactionState::ABORTED);
+//      throw ExecutionException("InsertExecutor::LockRow fail");
+//    }
+//  } catch (TransactionAbortException &e) {
+//    assert(txn->GetState() == TransactionState::ABORTED);
+//    throw ExecutionException("InsertExecutor::LockRow fail");
+//  }
+// #endif
+//}
 
 }  // namespace bustub

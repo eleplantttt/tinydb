@@ -10,16 +10,13 @@ namespace bustub {
 
 SortExecutor::SortExecutor(ExecutorContext *exec_ctx, const SortPlanNode *plan,
                            std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx),
-      plan_(plan),
-      child_executor_(std::move(child_executor)),
-      sorted_(false) {}
+    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)), sorted_(false) {}
 
 void SortExecutor::Init() {
   cur_ = 0;
 
   if (sorted_) {
-    return ;
+    return;
   }
 
   child_executor_->Init();
@@ -47,8 +44,8 @@ void SortExecutor::Init() {
       }
 
       return order_type == OrderByType::ASC || order_type == OrderByType::DEFAULT
-                  ? left_key.CompareLessThan(right_key) == CmpBool::CmpTrue
-                  : left_key.CompareGreaterThan(right_key) == CmpBool::CmpTrue;
+                 ? left_key.CompareLessThan(right_key) == CmpBool::CmpTrue
+                 : left_key.CompareGreaterThan(right_key) == CmpBool::CmpTrue;
     }
     return true;
   });
