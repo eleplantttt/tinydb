@@ -200,4 +200,25 @@ inline void OutputLogHeader(const char *file, int line, const char *func, int le
 
 }  // namespace bustub
 
+#define RED(x) "\033[0;31m" x " \033[0m"
+#define GREEN(x) "\033[0;32m" x "\033[0m"
+#define YELLOW(x) "\033[0;33m" x "\033[0m"
+#define BLUE(x) "\033[0;34m" x "\033[0m"
+#define MEGENTA(x) "\033[0;35m" x "\033[0m"
+#define CYAN(x) "\033[0;36m" x "\033[0m"
+
+#define BRED(x) "\033[0;41m" x " \033[0m"
+#define BGREEN(x) "\033[0;42m" x "\033[0m"
+#define BYELLOW(x) "\033[0;43m" x "\033[0m"
+#define BBLUE(x) "\033[0;44m" x "\033[0m"
+#define BMEGENTA(x) "\033[0;45m" x "\033[0m"
+#define BCYAN(x) "\033[0;46m" x "\033[0m"
+
+#define BRIGHTRED(x) "\033[0;91m" x " \033[0m"
+#define BRIGHTGREEN(x) "\033[0;92m" x " \033[0m"
+#define BRIGHTYELLOW(x) "\033[0;93m" x " \033[0m"
+#define BRIGHTBLUE(x) "\033[0;94m" x " \033[0m"
+#define BRIGHTMEGENTA(x) "\033[0;95m" x " \033[0m"
+#define BRIGHTCYAN(x) "\033[0;96m" x " \033[0m"
+
 #endif
